@@ -3,11 +3,12 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
  
+
+Copy code
 trigger:
 - master
- 
+
 variables:
- 
   # Azure Resource Manager connection created during pipeline creation
   azureSubscription: 'flatris-connection'
   
@@ -16,34 +17,36 @@ variables:
   
   # Resource group
   resourceGroupName: 'FLATRIS-Test'
- 
+
   # Environment name
   environmentName: 'flatrisapp-test'
- 
+
   # Agent VM image name
   vmImageName: 'ubuntu-latest'
-  
+
 stages:
 - stage: Archive
   displayName: Archive stage
-  jobs:  
+  jobs:
   - job: Archive
     displayName: Archive
     pool:
       vmImage: $(vmImageName)
-    steps:   
-    - task: AzureAppServiceSettings@1
+    steps:
+    - checkout: self
+    - task: NodeTool@0
       inputs:
-        azureSubscription: $(azureSubscription)
-        appName: $(webAppName)
-        resourceGroupName: $(resourceGroupName)
-        appSettings: |
-          [
-            {
-              "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
-              "value": "true"
-            }
-          ]
+        versionSpec: '10.x'
+      displayName: 'Install Node.js'
+    
+    - script: |
+        npm install
+      displayName: 'npm install dependencies'
+
+    - script: |
+        npm test
+      displayName: 'Run tests'
+
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
@@ -52,10 +55,10 @@ stages:
         archiveType: zip
         archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
         replaceExistingArchive: true
- 
+
     - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
       artifact: drop
- 
+
 - stage: Deploy
   displayName: Deploy stage
   dependsOn: Archive
@@ -64,18 +67,17 @@ stages:
   - deployment: Deploy
     displayName: Deploy
     environment: $(environmentName)
-    pool: 
+    pool:
       vmImage: $(vmImageName)
     strategy:
       runOnce:
         deploy:
-          steps:            
+          steps:
           - task: AzureWebApp@1
-            displayName: 'Azure Web App Deploy: Matt-Test-NodeJS-Deploy'
+            displayName: 'Azure Web App Deploy: flatrisapp-test'
             inputs:
               azureSubscription: $(azureSubscription)
               appType: webAppLinux
               appName: $(webAppName)
               runtimeStack: 'NODE|10.14'
               package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
- 
